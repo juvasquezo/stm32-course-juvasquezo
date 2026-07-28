@@ -1,7 +1,7 @@
 # Ejercicios de Tarea — Semanas 00 a 03
 ## Curso de Sistemas Embebidos STM32F4xx
 
-Este documento contiene los ejercicios para las semanas 00 a 03. Debes trabajarlos en orden, a tu propio ritmo, continuando desde donde quedó la sesión de taller. Todos los ejercicios se ejecutan directamente en el microcontrolador STM32F4xx conectado a tu portátil a través de STM32CubeIDE. No hay `printf` ni salida serial — el depurador es tu única ventana a lo que está haciendo el microcontrolador, y aprender a usarlo bien es en sí mismo uno de los objetivos de estos ejercicios.
+Este documento contiene los ejercicios para las semanas 00 a 03. Debes trabajarlos en orden, a tu propio ritmo, continuando desde donde quedó la sesión de taller. Todos los ejercicios se ejecutan directamente en el microcontrolador STM32F4xx conectado a tu portátil a través de STM32CubeIDE. No hay `printf` ni salida serial — el depurador es tu única ventana a lo que está haciendo el microcontrolador, y aprender a usarlo bien es en sí mismo uno de los objetivos de estos ejrcicios.
 
 Antes de ejecutar cualquier fragmento de código, predice siempre el resultado primero. Escribe tu predicción en papel o en un comentario. Luego ejecuta el código y compara lo que ves en el depurador con lo que esperabas. Si coinciden, perfecto — lo entendiste. Si no coinciden, mejor aún — tienes algo real que investigar y aprender. Nunca omitas el paso de predicción.
 
