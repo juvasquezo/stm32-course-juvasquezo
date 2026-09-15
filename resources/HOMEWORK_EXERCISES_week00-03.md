@@ -1,4 +1,4 @@
-# Homework Exercises — Weeks 00 to 03
+    # Homework Exercises — Weeks 00 to 03
 ## STM32F4xx Embedded Systems Course
 
 This document contains the exercises for weeks 00 through 03. You should work through them in order, at your own pace, picking up from wherever the workshop session left off. All exercises run directly on the STM32F4xx microcontroller connected to your laptop through STM32CubeIDE. There is no `printf` or serial output — the debugger is your only window into what the microcontroller is doing, and learning to use it well is itself one of the goals of these exercises.
