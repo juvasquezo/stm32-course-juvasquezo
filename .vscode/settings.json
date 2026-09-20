@@ -1,0 +1,9 @@
+{
+    "cmake.sourceDirectory": "${workspaceFolder}/Prueba",
+    "cmake.cmakePath": "cube-cmake",
+    "cmake.configurePreset": "Debug",
+    "cmake.buildPreset": "Debug",
+    "cmake.preferredGenerators": [
+        "Ninja"
+    ]
+}
