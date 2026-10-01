@@ -17,9 +17,77 @@
  */
 
 #include <stdint.h>
+#include "stm32f4xx.h"
+#include "stm32f411xe.h"
+
+void init_gpio(void);
+void init_tim3(void);
+
 
 int main(void)
 {
-    /* Loop forever */
-	for(;;);
+    init_gpio();
+
+    init_tim3();
+    
+    while (1)
+    {
+        // El pin PA5 permanecerá en alto (HIGH)
+    }
+    
+    return 0;
 }
+
+void init_gpio(void)
+{
+    // 1. Habilitar reloj para GPIOA
+    RCC->AHB1ENR |= RCC_AHB1ENR_GPIOAEN;
+
+    // 2. Limpiar los bits de modo para PA5 y configurarlo como Salida (0b01)
+    GPIOA->MODER &= ~(0b11 << GPIO_MODER_MODE5_Pos);
+    GPIOA->MODER |= (0b01 << GPIO_MODER_MODE5_Pos);
+    
+    // 3. Configurar tipo de salida como Push-Pull (0)
+    GPIOA->OTYPER &= ~(GPIO_OTYPER_OT5);
+
+    // 4. Limpiar y establecer velocidad (opcional, p. ej. Very High Speed = 0b11)
+    GPIOA->OSPEEDR &= ~(0b11 << GPIO_OSPEEDR_OSPEED5_Pos);
+    GPIOA->OSPEEDR |= (0b11 << GPIO_OSPEEDR_OSPEED5_Pos);
+
+    // 5. Sin resistencias de Pull-up / Pull-down (0b00)
+    GPIOA->PUPDR &= ~(0b11 << GPIO_PUPDR_PUPD5_Pos);
+
+    // 6. Apagar el pin PA5
+    GPIOA->ODR |= (GPIO_ODR_OD5);
+}
+
+void init_tim3(void){
+
+    RCC->APB1ENR |= RCC_APB1ENR_TIM3EN; // Habilitar reloj para TIM3
+
+    TIM3->CNT = 0; // Reiniciar contador
+    TIM3->PSC = (16000 - 1); // Para incrementar el CNT cada 0,1 us
+    TIM3->ARR = (2500 - 1); // Auto-reload para 1 segundo
+
+    TIM3->CR1 &= ~(0b11 << TIM_CR1_CKD_Pos); // LImpia, la señal de 16MHz para sin cambios 
+    TIM3->CR1 |= TIM_CR1_CEN; // Habilitar el contador
+    TIM3->CR1 &= ~(TIM_CR1_DIR_Pos); // Contador ascendente
+
+    TIM3->DIER |= (TIM_DIER_UIE); // Habilitar interrupción de actualización
+
+    NVIC_EnableIRQ(TIM3_IRQn); // Habilitar interrupción en NVIC
+
+    // Activar el contador  
+}
+
+void TIM3_IRQHandler(void)
+{
+    if (TIM3->SR && TIM_SR_UIF) // Verificar si la interrupción es por actualización
+    {
+        TIM3->SR &= ~TIM_SR_UIF; // Limpiar la bandera de interrupción
+
+        // Cambiar el estado del pin PA5
+        GPIOA->ODR ^= GPIO_ODR_OD5; // Toggle PA5
+    }
+} 
+
