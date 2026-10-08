@@ -21,14 +21,65 @@
 #include "stm32f411xe.h"
 
 void gpio_init(void);
-void exti13_init(void);
+void init_tim3(void);
+
+
 int main(void)
 {
-    while(1){
+    gpio_init();
 
+    init_tim3();
+    
+    while (1)
+    {
+        // El pin PA5 permanecerá en alto (HIGH)
     }
+
+    return 0;
 }
 
-void gpio_init(void){
+void gpio_init(void)
+{
+    // 1. Habilitar reloj para GPIOC
+    RCC->AHB1ENR |= RCC_AHB1ENR_GPIOCEN;
 
+    // 2. Limpiar los bits de modo para PA5 y configurarlo como Salida (0b01)
+    GPIOC->MODER &= ~(0b11 << GPIO_MODER_MODE13_Pos);
+    GPIOC->MODER |= (0b01 << GPIO_MODER_MODE13_Pos);
+
+    // 5. Sin resistencias de Pull-up / Pull-down (0b00)
+    GPIOC->PUPDR &= ~(0b11 << GPIO_PUPDR_PUPD5_Pos);
+
+    // 6. Apagar el pin PA5
+    GPIOC->ODR |= (GPIO_ODR_OD5);
 }
+
+void init_tim3(void){
+
+    RCC->APB1ENR |= RCC_APB1ENR_TIM3EN; // Habilitar reloj para TIM3
+
+    TIM3->CNT = 0; // Reiniciar contador
+    TIM3->PSC = (1600 - 1); // Para incrementar el CNT cada 0,1 us
+    TIM3->ARR = (2500 - 1); // Auto-reload para 1 segundo
+
+    TIM3->CR1 &= ~(0b11 << TIM_CR1_CKD_Pos); // LImpia, la señal de 16MHz para sin cambios 
+    TIM3->CR1 |= TIM_CR1_CEN; // Habilitar el contador
+    TIM3->CR1 &= ~(TIM_CR1_DIR_Pos); // Contador ascendente
+
+    TIM3->DIER |= (TIM_DIER_UIE); // Habilitar interrupción de actualización
+
+    NVIC_EnableIRQ(TIM3_IRQn); // Habilitar interrupción en NVIC
+
+    // Activar el contador  
+}
+
+void TIM3_IRQHandler(void)
+{
+    if (TIM3->SR && TIM_SR_UIF) // Verificar si la interrupción es por actualización
+    {
+        TIM3->SR &= ~TIM_SR_UIF; // Limpiar la bandera de interrupción
+
+        // Cambiar el estado del pin PA5
+        GPIOC->ODR ^= GPIO_ODR_OD5; // Toggle PA5
+    }
+} 
