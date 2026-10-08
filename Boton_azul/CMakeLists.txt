@@ -45,9 +45,8 @@ target_compile_options(${PROJECT_NAME} PRIVATE
   # User defined compiler options
 )
 
-# Add additional defined symbols
 target_compile_definitions(${PROJECT_NAME} PRIVATE
-  # Add additional defined symbols here
+  STM32F411xE
 )
 
 # Linker options

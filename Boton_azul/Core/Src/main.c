@@ -21,18 +21,19 @@
 #include "stm32f411xe.h"
 
 void gpio_init(void);
-void init_tim3(void);
+void exti_init(void);
+void EXTI15_10_IRQHandler(void);
 
+volatile uint8_t btn_flag = 0;
 
 int main(void)
 {
     gpio_init();
-
-    init_tim3();
+    exti_init();
     
     while (1)
     {
-        // El pin PA5 permanecerá en alto (HIGH)
+    
     }
 
     return 0;
@@ -45,41 +46,35 @@ void gpio_init(void)
 
     // 2. Limpiar los bits de modo para PA5 y configurarlo como Salida (0b01)
     GPIOC->MODER &= ~(0b11 << GPIO_MODER_MODE13_Pos);
-    GPIOC->MODER |= (0b01 << GPIO_MODER_MODE13_Pos);
 
     // 5. Sin resistencias de Pull-up / Pull-down (0b00)
-    GPIOC->PUPDR &= ~(0b11 << GPIO_PUPDR_PUPD5_Pos);
+    GPIOC->PUPDR &= ~(0b11 << GPIO_PUPDR_PUPD13_Pos);
 
-    // 6. Apagar el pin PA5
-    GPIOC->ODR |= (GPIO_ODR_OD5);
 }
 
-void init_tim3(void){
-
-    RCC->APB1ENR |= RCC_APB1ENR_TIM3EN; // Habilitar reloj para TIM3
-
-    TIM3->CNT = 0; // Reiniciar contador
-    TIM3->PSC = (1600 - 1); // Para incrementar el CNT cada 0,1 us
-    TIM3->ARR = (2500 - 1); // Auto-reload para 1 segundo
-
-    TIM3->CR1 &= ~(0b11 << TIM_CR1_CKD_Pos); // LImpia, la señal de 16MHz para sin cambios 
-    TIM3->CR1 |= TIM_CR1_CEN; // Habilitar el contador
-    TIM3->CR1 &= ~(TIM_CR1_DIR_Pos); // Contador ascendente
-
-    TIM3->DIER |= (TIM_DIER_UIE); // Habilitar interrupción de actualización
-
-    NVIC_EnableIRQ(TIM3_IRQn); // Habilitar interrupción en NVIC
-
-    // Activar el contador  
-}
-
-void TIM3_IRQHandler(void)
+void exti_init(void)
 {
-    if (TIM3->SR && TIM_SR_UIF) // Verificar si la interrupción es por actualización
-    {
-        TIM3->SR &= ~TIM_SR_UIF; // Limpiar la bandera de interrupción
 
-        // Cambiar el estado del pin PA5
-        GPIOC->ODR ^= GPIO_ODR_OD5; // Toggle PA5
+    RCC->APB2ENR |= (0b1 << RCC_APB2ENR_SYSCFGEN_Pos); // Habilitar reloj para SYSCFG
+
+    SYSCFG->EXTICR[3] &= ~(0b1111 << SYSCFG_EXTICR4_EXTI13_Pos); // Limpiar la configuración de EXTI13
+    SYSCFG->EXTICR[3] |= (0b0010 << SYSCFG_EXTICR4_EXTI13_Pos); // Configurar EXTI13 para el pin PC13
+
+    EXTI->RTSR &= ~(0b1 << EXTI_RTSR_TR13_Pos); // Apagar el flanco de subida para EXTI13
+    EXTI->FTSR |= (0b1 << EXTI_FTSR_TR13_Pos); // Configurar EXTI13 para disparar en flanco de bajada
+
+    EXTI->IMR |= (0b1 << EXTI_IMR_MR13_Pos); // Habilitar la interrupción para EXTI13
+
+    NVIC_SetPriority(EXTI15_10_IRQn, 1);
+    NVIC_EnableIRQ(EXTI15_10_IRQn);
+
+}
+
+void EXTI15_10_IRQHandler(void)
+{
+    if (EXTI->PR & EXTI_PR_PR13)
+    {
+        EXTI->PR = EXTI_PR_PR13;
+        btn_flag += 1;
     }
-} 
+}
