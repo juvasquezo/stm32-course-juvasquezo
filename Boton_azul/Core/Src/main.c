@@ -23,17 +23,79 @@
 void gpio_init(void);
 void exti_init(void);
 void EXTI15_10_IRQHandler(void);
+void tim2_init(void);
+
+typedef enum {
+    Rojo,
+    VerdeE,
+    VerdeP,
+    Amarillo
+} EstadoSemaforo ;
+
+EstadoSemaforo estado_actual = Rojo; // Estado inicial del semáforo
 
 volatile uint8_t btn_flag = 0;
+uint8_t parpadeos = 0;
+
 
 int main(void)
 {
     gpio_init();
     exti_init();
+    tim2_init();
     
     while (1)
     {
+        if (btn_flag == 1){
+            btn_flag = 0;
+
+            switch (estado_actual){
+                    //Verde PB8, Amarillo PB9, Rojo PB6.
+                case(Rojo):
+
+                    GPIOB->ODR &= ~(GPIO_ODR_OD8);
+                    GPIOB->ODR &= ~(GPIO_ODR_OD9);
+                    GPIOB->ODR |= (GPIO_ODR_OD6);
+
+                    estado_actual = VerdeE;
+                    break;
+
+                case(VerdeE):
+
+                    GPIOB->ODR |= (GPIO_ODR_OD8);
+                    GPIOB->ODR &= ~(GPIO_ODR_OD9);
+                    GPIOB->ODR &= ~(GPIO_ODR_OD6);
+
+                    estado_actual = VerdeP;
+                    break;
+                
+                case(VerdeP):
+
+                    GPIOB->ODR ^= (GPIO_ODR_OD8);
+                    parpadeos++;
+
+                    if (parpadeos == 10){
+                        parpadeos = 0;
+                        estado_actual = Amarillo;
+                    }
+                    break;
+
+                case(Amarillo):
+                    
+                    GPIOB->ODR &= ~(GPIO_ODR_OD8);
+                    GPIOB->ODR |= (GPIO_ODR_OD9);
+                    GPIOB->ODR &= ~(GPIO_ODR_OD6);                    
+                    
+                    estado_actual = Rojo;
+                    break;                  
+                default:
+
+                estado_actual = Rojo;
+                break;
+            }
+        }
     
+        
     }
 
     return 0;
@@ -41,32 +103,68 @@ int main(void)
 
 void gpio_init(void)
 {
-    // 1. Habilitar reloj para GPIOC
+
+    // 1. Habilitar señal de reloj para GPIOx
     RCC->AHB1ENR |= RCC_AHB1ENR_GPIOCEN;
+    RCC->AHB1ENR |= RCC_AHB1ENR_GPIOBEN;
+    RCC->AHB1ENR |= RCC_AHB1ENR_GPIOAEN;
 
-    // 2. Limpiar los bits de modo para PA5 y configurarlo como Salida (0b01)
-    GPIOC->MODER &= ~(0b11 << GPIO_MODER_MODE13_Pos);
+    // 2. Configurar PC13 como entrada (botón)
+    GPIOC->MODER &= ~(0b11 << GPIO_MODER_MODE13_Pos);// 2. Limpiar los bits de modo para PA5 y configurarlo como Salida (0b01)
+    GPIOC->PUPDR &= ~(0b11 << GPIO_PUPDR_PUPD13_Pos); // 5. Sin resistencias de Pull-up / Pull-down (0b00)
+    
+    // 3. Configurar PA5 como salida (LED blinky)
+    GPIOA->MODER &= ~(GPIO_MODER_MODE5);
+    GPIOA->MODER |= (GPIO_MODER_MODE5_0);
+    GPIOA->OTYPER &= ~(GPIO_OTYPER_OT5);
+    GPIOA->OSPEEDR &= ~(GPIO_OSPEEDR_OSPEED5);
+    GPIOA->PUPDR &= ~(GPIO_PUPDR_PUPD5);    
+    GPIOA->ODR  &= ~(GPIO_ODR_OD5);
 
-    // 5. Sin resistencias de Pull-up / Pull-down (0b00)
-    GPIOC->PUPDR &= ~(0b11 << GPIO_PUPDR_PUPD13_Pos);
+    // 1. Configurar GPIOB para los LEDs (PB8, PB9, PB6)
+    GPIOB->MODER &= ~(GPIO_MODER_MODE8_Pos | GPIO_MODER_MODE9_Pos | GPIO_MODER_MODE6_Pos); // Limpiar los bits de modo para PB8, PB9 y PB6
+    GPIOB->MODER |= (GPIO_MODER_MODE8_0 | GPIO_MODER_MODE9_0 | GPIO_MODER_MODE6_0); // Configurar PB8, PB9 y PB6 como salida (modo general purpose output)
+    GPIOB->OTYPER &= ~(GPIO_OTYPER_OT8 | GPIO_OTYPER_OT9 | GPIO_OTYPER_OT6); // Configurar PB8, PB9 y PB6 como salida push-pull
+    GPIOB->OSPEEDR &= ~(GPIO_OSPEEDR_OSPEED8 | GPIO_OSPEEDR_OSPEED9 | GPIO_OSPEEDR_OSPEED6); // Configurar PB8, PB9 y PB6 como baja velocidad
+    GPIOB->PUPDR &= ~(GPIO_PUPDR_PUPD8 | GPIO_PUPDR_PUPD9 | GPIO_PUPDR_PUPD6); // Configurar PB8, PB9 y PB6 sin pull-up/pull-down
+    GPIOB->ODR  &= ~(GPIO_ODR_OD8 | GPIO_ODR_OD9 | GPIO_ODR_OD6); // Inicializar PB8, PB9 y PB6 en bajo
+
 
 }
 
 void exti_init(void)
 {
 
-    RCC->APB2ENR |= (0b1 << RCC_APB2ENR_SYSCFGEN_Pos); // Habilitar reloj para SYSCFG
+    RCC->APB2ENR |= (RCC_APB2ENR_SYSCFGEN); // Habilitar reloj para SYSCFG
 
-    SYSCFG->EXTICR[3] &= ~(0b1111 << SYSCFG_EXTICR4_EXTI13_Pos); // Limpiar la configuración de EXTI13
-    SYSCFG->EXTICR[3] |= (0b0010 << SYSCFG_EXTICR4_EXTI13_Pos); // Configurar EXTI13 para el pin PC13
+    SYSCFG->EXTICR[3] &= ~(SYSCFG_EXTICR4_EXTI13); // Limpiar la configuración de EXTI13
+    SYSCFG->EXTICR[3] |= (SYSCFG_EXTICR4_EXTI13_PC); // Configurar EXTI13 para el pin PC13
 
-    EXTI->RTSR &= ~(0b1 << EXTI_RTSR_TR13_Pos); // Apagar el flanco de subida para EXTI13
-    EXTI->FTSR |= (0b1 << EXTI_FTSR_TR13_Pos); // Configurar EXTI13 para disparar en flanco de bajada
+    EXTI->RTSR &= ~(EXTI_RTSR_TR13); // Apagar el flanco de subida para EXTI13
+    EXTI->FTSR |= (EXTI_FTSR_TR13); // Configurar EXTI13 para disparar en flanco de bajada
 
-    EXTI->IMR |= (0b1 << EXTI_IMR_MR13_Pos); // Habilitar la interrupción para EXTI13
+    EXTI->PR |= (EXTI_PR_PR13); // Limpiar la bandera pendiente de EXTI13
+    EXTI->IMR |= (EXTI_IMR_MR13); // Habilitar la interrupción para EXTI13
 
-    NVIC_SetPriority(EXTI15_10_IRQn, 1);
-    NVIC_EnableIRQ(EXTI15_10_IRQn);
+    NVIC_EnableIRQ(EXTI15_10_IRQn); //Habilitar la interrupción EXTI15_10 en el NVIC
+
+}
+
+void tim2_init(void){
+
+    RCC->APB1ENR |= (RCC_APB1ENR_TIM2EN);
+
+    TIM2->CNT = 0;
+    TIM2->PSC = (16000-1);
+    TIM2->ARR = (2500-1);
+    TIM2->DIER |= (TIM_DIER_UIE);
+    TIM2->CR1 &= ~(TIM_CR1_ARPE); 
+    TIM2->CR1 &= ~(TIM_CR1_CKD);
+    TIM2->CR1 &= ~(TIM_CR1_DIR);
+
+    TIM2->SR = ~TIM_SR_UIF;
+    NVIC_EnableIRQ(TIM2_IRQn);
+    TIM2->CR1 |= (TIM_CR1_CEN);
 
 }
 
@@ -75,6 +173,15 @@ void EXTI15_10_IRQHandler(void)
     if (EXTI->PR & EXTI_PR_PR13)
     {
         EXTI->PR = EXTI_PR_PR13;
-        btn_flag += 1;
+        btn_flag = 1;
+    }
+}
+
+void TIM2_IRQHandler(void)
+{
+    if (TIM2->SR & TIM_SR_UIF)
+    {
+        TIM2->SR = ~TIM_SR_UIF;
+        GPIOA->ODR ^= GPIO_ODR_OD5;
     }
 }
