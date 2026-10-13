@@ -87,7 +87,8 @@ int main(void)
                     GPIOB->ODR &= ~(GPIO_ODR_OD6);                    
                     
                     estado_actual = Rojo;
-                    break;                  
+                    break;   
+                               
                 default:
 
                 estado_actual = Rojo;
@@ -122,7 +123,7 @@ void gpio_init(void)
     GPIOA->ODR  &= ~(GPIO_ODR_OD5);
 
     // 1. Configurar GPIOB para los LEDs (PB8, PB9, PB6)
-    GPIOB->MODER &= ~(GPIO_MODER_MODE8_Pos | GPIO_MODER_MODE9_Pos | GPIO_MODER_MODE6_Pos); // Limpiar los bits de modo para PB8, PB9 y PB6
+    GPIOB->MODER &= ~(GPIO_MODER_MODE8 | GPIO_MODER_MODE9 | GPIO_MODER_MODE6); // Limpiar los bits de modo para PB8, PB9 y PB6
     GPIOB->MODER |= (GPIO_MODER_MODE8_0 | GPIO_MODER_MODE9_0 | GPIO_MODER_MODE6_0); // Configurar PB8, PB9 y PB6 como salida (modo general purpose output)
     GPIOB->OTYPER &= ~(GPIO_OTYPER_OT8 | GPIO_OTYPER_OT9 | GPIO_OTYPER_OT6); // Configurar PB8, PB9 y PB6 como salida push-pull
     GPIOB->OSPEEDR &= ~(GPIO_OSPEEDR_OSPEED8 | GPIO_OSPEEDR_OSPEED9 | GPIO_OSPEEDR_OSPEED6); // Configurar PB8, PB9 y PB6 como baja velocidad
@@ -156,7 +157,7 @@ void tim2_init(void){
 
     TIM2->CNT = 0;
     TIM2->PSC = (16000-1);
-    TIM2->ARR = (2500-1);
+    TIM2->ARR = (500-1);
     TIM2->DIER |= (TIM_DIER_UIE);
     TIM2->CR1 &= ~(TIM_CR1_ARPE); 
     TIM2->CR1 &= ~(TIM_CR1_CKD);
