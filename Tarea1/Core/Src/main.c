@@ -14,57 +14,210 @@
  * If no LICENSE file comes with this software, it is provided AS-IS.
  *
  ******************************************************************************
+ * PIN 1 ----- PC5
+ * PIN 2 ----- PC13
+ * PIN 3 ----- PC6
+ * PIN 4 ----- PB7
+ * PIN a ----- PB12
+ * PIN b ----- PA12
+ * PIN C ----- PC11
+ * PIN d ----- PC12
+ * PIN e ----- PC10
+ * PIN f ----- PA11
+ * PIN g ----- PD2
+ * 
+ *
  */
 
 #include <stdint.h>
 #include "stm32f4xx.h"
 #include "stm32f411xe.h"
 
-void gpio_init(void);
-void tim_init(void);
+uint8_t contador = 0;
+uint8_t digito_actual = 0;
 
+void gpio_init(void);
+void tim9_init(void);
+void tim3_init(void);
+
+void cambiar_digito(void);
+void escribir(void);
+void apagar(void);
+
+typedef enum {
+    REPOSO,
+    INCREMENTO,
+    DECREMENTO,
+    ACTUALIZAR
+} EstadoSistema;
+
+typedef struct{
+    GPIO_TypeDef*puerto;
+    uint8_t pin;    
+}PinSegmento;
+
+const PinSegmento mapa_segmentos[7]={
+    {GPIOA, 5},  // Segmento A -> PA5
+    {GPIOB, 3},  // Segmento B -> PB3
+    {GPIOC, 13}, // Segmento C -> PC13
+    {GPIOD, 2},  // Segmento D -> PD2
+    {GPIOA, 12}, // Segmento E -> PA12
+    {GPIOB, 8},  // Segmento F -> PB8
+    {GPIOC, 6}   // Segmento G -> PC6
+}
+const uint8_t tabla_7seg[10] = {
+    0b11000000, // 0 (A,B,C,D,E,F encendidos; G y DP apagados)
+    0b11111001, // 1 (B,C encendidos)
+    0b10100100, // 2 (A,B,D,E,G encendidos)
+    0b10110000, // 3 (A,B,C,D,G encendidos)
+    0b10011001, // 4 (B,C,F,G encendidos)
+    0b10010010, // 5 (A,C,D,F,G encendidos)
+    0b10000010, // 6 (A,C,D,E,F,G encendidos)
+    0b11111000, // 7 (A,B,C encendidos)
+    0b10000000, // 8 (A,B,C,D,E,F,G encendidos)
+    0b10010000  // 9 (A,B,C,D,F,G encendidos)
+};
+
+EstadoSistema Estado = REPOSO;
 
 int main(void)
 {   
+    gpio_init();
+    tim9_init();
+    tim3_init();
 
-    
+
     while(1){
 
+        switch (Estado) {
+            
+            case(REPOSO):
+
+                apagar();
+                cambiar_digito();
+                escribir();    
+
+                break;
+            case(INCREMENTO):
+
+                contador ++;
+
+                Estado = REPOSO;
+                break;
+            case(DECREMENTO):
+
+                contador --;
+
+                Estado = REPOSO;
+                break;
+            case(ACTUALIZAR):
+            break;
+        }
     }
 }
 
-void gpio_init(void)
-{
+void gpio_init(void){
     //Se encienden las señales de reloj
     RCC->AHB1ENR |= (RCC_AHB1ENR_GPIOAEN);
+    RCC->AHB1ENR |= (RCC_AHB1ENR_GPIOBEN);
+    RCC->AHB1ENR |= (RCC_AHB1ENR_GPIOCEN);
+    RCC->AHB1ENR |= (RCC_AHB1ENR_GPIODEN);
+    RCC->AHB1ENR |= (RCC_AHB1ENR_GPIOHEN);
 
-    //Configuramos el gpioa de la salida del blinky PA5
-    GPIOA->MODER  &= ~(GPIO_MODER_MODE5);
-    GPIOA->MODER |= (GPIO_MODER_MODE5_0);
-    GPIOA->OTYPER |= (GPIO_OTYPER_OT5);
-    GPIOA->OSPEEDR &= ~(GPIO_OSPEEDR_OSPEED5);
-    GPIOA->PUPDR &= ~(GPIO_PUPDR_PUPD5);
-    GPIOA->ODR &= ~(GPIO_ODR_OD5);
+    //Configuramos el gpioh de la salida del blinky PH1
+    GPIOH->MODER  &= ~(GPIO_MODER_MODE1);
+    GPIOH->MODER |= (GPIO_MODER_MODE1_0);
+    GPIOH->OTYPER &= ~(GPIO_OTYPER_OT1);
+    GPIOH->OSPEEDR &= ~(GPIO_OSPEEDR_OSPEED1);
+    GPIOH->PUPDR &= ~(GPIO_PUPDR_PUPD1);
+    GPIOH->ODR &= ~(GPIO_ODR_OD1);
+
+    //Configuramos el gpioa de la entrada del 7 segmentos
+    GPIOA->ODR |= (GPIO_ODR_OD12|GPIO_ODR_OD11);
+    GPIOA->MODER  &= ~(GPIO_MODER_MODE12|GPIO_MODER_MODE11);
+    GPIOA->MODER |= (GPIO_MODER_MODE12_0|GPIO_MODER_MODE11_0);
+    GPIOA->OTYPER &= ~(GPIO_OTYPER_OT12|GPIO_OTYPER_OT11);
+    GPIOA->OSPEEDR &= ~(GPIO_OSPEEDR_OSPEED12|GPIO_OSPEEDR_OSPEED11);
+    GPIOA->PUPDR &= ~(GPIO_PUPDR_PUPD12|GPIO_PUPDR_PUPD11);
+
+    GPIOC->ODR |= (GPIO_ODR_OD10|GPIO_ODR_OD12|GPIO_ODR_OD11|GPIO_ODR_OD5|GPIO_ODR_OD13|GPIO_ODR_OD6);
+    GPIOC->MODER  &= ~(GPIO_MODER_MODE10|GPIO_MODER_MODE12|GPIO_MODER_MODE11|GPIO_MODER_MODE5|GPIO_MODER_MODE13|GPIO_MODER_MODE6);
+    GPIOC->MODER |= (GPIO_MODER_MODE10_0|GPIO_MODER_MODE12_0|GPIO_MODER_MODE11_0|GPIO_MODER_MODE5_0|GPIO_MODER_MODE13_0|GPIO_MODER_MODE6_0);
+    GPIOC->OTYPER &= ~(GPIO_OTYPER_OT10|GPIO_OTYPER_OT12|GPIO_OTYPER_OT11|GPIO_OTYPER_OT5|GPIO_OTYPER_OT13|GPIO_OTYPER_OT6);
+    GPIOC->OSPEEDR &= ~(GPIO_OSPEEDR_OSPEED10|GPIO_OSPEEDR_OSPEED12|GPIO_OSPEEDR_OSPEED11|GPIO_OSPEEDR_OSPEED5|GPIO_OSPEEDR_OSPEED13|GPIO_OSPEEDR_OSPEED6);
+    GPIOC->PUPDR &= ~(GPIO_PUPDR_PUPD10|GPIO_PUPDR_PUPD12|GPIO_PUPDR_PUPD11|GPIO_PUPDR_PUPD5|GPIO_PUPDR_PUPD13|GPIO_PUPDR_PUPD6);
+
+    GPIOB->ODR |= (GPIO_ODR_OD12|GPIO_ODR_OD7);
+    GPIOB->MODER  &= ~(GPIO_MODER_MODE12|GPIO_MODER_MODE7);
+    GPIOB->MODER |= (GPIO_MODER_MODE12_0|GPIO_MODER_MODE7_0);
+    GPIOB->OTYPER &= ~(GPIO_OTYPER_OT12|GPIO_OTYPER_OT7);
+    GPIOB->OSPEEDR &= ~(GPIO_OSPEEDR_OSPEED12|GPIO_OSPEEDR_OSPEED7);
+    GPIOB->PUPDR &= ~(GPIO_PUPDR_PUPD12|GPIO_PUPDR_PUPD7);
+
+    GPIOD->ODR |= (GPIO_ODR_OD2);
+    GPIOD->MODER  &= ~(GPIO_MODER_MODE2);
+    GPIOD->MODER |= (GPIO_MODER_MODE2_0);
+    GPIOD->OTYPER &= ~(GPIO_OTYPER_OT2);
+    GPIOD->OSPEEDR &= ~(GPIO_OSPEEDR_OSPEED2);
+    GPIOD->PUPDR &= ~(GPIO_PUPDR_PUPD2);
 
 
 }
 
-void tim_init(void)
-{
+void tim9_init(void){
     RCC->APB2ENR |= (RCC_APB2ENR_TIM9EN);
     
     TIM9->CNT = 0;
     TIM9->PSC = (16000-1);
-    TIM9->ARR = (1000-1);
+    TIM9->ARR = (2500-1);
     TIM9->DIER |= (TIM_DIER_UIE);
     TIM9->CR1 &= ~(TIM_CR1_CKD);
     TIM9->CR1 &= ~(TIM_CR1_ARPE);
     TIM9->SR = ~(TIM_SR_UIF);
-    NVIC_EnableIRQ(TIM1_BRK_TIM9_IRQHandler);
-    TIM9.CR1 |= (TIM_CR1_CEN);
+    NVIC_EnableIRQ(TIM1_BRK_TIM9_IRQn);
+    TIM9->CR1 |= (TIM_CR1_CEN);
 }
 
 void TIM1_BRK_TIM9_IRQHandler(void){
+    if (TIM9->SR & TIM_SR_UIF){
+        GPIOH->ODR ^= (GPIO_ODR_OD1);
+        TIM9->SR = ~(TIM_SR_UIF);
+        Estado = INCREMENTO;
+    }
+}
+
+void tim3_init(void){
+    RCC->APB1ENR |= (RCC_APB1ENR_TIM3EN);
     
+    TIM3->CNT = 0;
+    TIM3->PSC = (1600-1);
+    TIM3->ARR = (70-1);
+    TIM3->DIER |= (TIM_DIER_UIE);
+    TIM3->CR1 &= ~(TIM_CR1_CKD);
+    TIM3->CR1 &= ~(TIM_CR1_ARPE);
+    TIM3->CR1 &= ~(TIM_CR1_DIR);
+    TIM3->SR = ~(TIM_SR_UIF);
+    NVIC_EnableIRQ(TIM3_IRQn);
+    TIM3->CR1 |= (TIM_CR1_CEN);
+}
+
+void TIM3_IRQHandler(void)
+{
+    if(TIM3->SR & TIM_SR_UIF){
+        TIM3->SR = ~(TIM_SR_UIF);
+        digito_actual = (digito_actual+1) % 4;
+    }
+}
+
+void apagar(void)
+{
+    GPIOA->ODR |= (GPIO_ODR_OD12|GPIO_ODR_OD11);
+    GPIOC->ODR |= (GPIO_ODR_OD10|GPIO_ODR_OD12|GPIO_ODR_OD11|GPIO_ODR_OD5|GPIO_ODR_OD13|GPIO_ODR_OD6);
+    GPIOB->ODR |= (GPIO_ODR_OD12|GPIO_ODR_OD7);
+    GPIOD->ODR |= (GPIO_ODR_OD2);
+
+}
+
+void escribir(void){
 
 }
