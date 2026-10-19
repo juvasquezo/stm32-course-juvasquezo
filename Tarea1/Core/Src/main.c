@@ -33,8 +33,11 @@
 #include "stm32f4xx.h"
 #include "stm32f411xe.h"
 
-uint8_t contador = 0;
+uint16_t contador = 0;
 uint8_t digito_actual = 0;
+uint8_t cambio_digito_flag = 0;
+uint8_t bit = 0;
+uint8_t valor[4] = {0,0,0,0};
 
 void gpio_init(void);
 void tim9_init(void);
@@ -57,14 +60,15 @@ typedef struct{
 }PinSegmento;
 
 const PinSegmento mapa_segmentos[7]={
-    {GPIOA, 5},  // Segmento A -> PA5
-    {GPIOB, 3},  // Segmento B -> PB3
-    {GPIOC, 13}, // Segmento C -> PC13
-    {GPIOD, 2},  // Segmento D -> PD2
-    {GPIOA, 12}, // Segmento E -> PA12
-    {GPIOB, 8},  // Segmento F -> PB8
-    {GPIOC, 6}   // Segmento G -> PC6
-}
+    {GPIOB, 12},  // Segmento A -> PB12
+    {GPIOA, 12},  // Segmento B -> PA12
+    {GPIOC, 11}, // Segmento C -> PC11
+    {GPIOC, 12},  // Segmento D -> PC12
+    {GPIOC, 10}, // Segmento E -> PC10
+    {GPIOA, 11},  // Segmento F -> PA11
+    {GPIOD, 2}   // Segmento G -> PD2
+};
+
 const uint8_t tabla_7seg[10] = {
     0b11000000, // 0 (A,B,C,D,E,F encendidos; G y DP apagados)
     0b11111001, // 1 (B,C encendidos)
@@ -92,11 +96,13 @@ int main(void)
         switch (Estado) {
             
             case(REPOSO):
-
-                apagar();
-                cambiar_digito();
-                escribir();    
-
+                if (cambio_digito_flag) {
+                    apagar();           // 1. Apaga el dígito anterior (elimina ghosting)
+                    escribir();         // 2. Prepara los nuevos segmentos
+                    cambiar_digito();   // 3. Enciende el nuevo dígito
+                    
+                    cambio_digito_flag = 0; // Limpia la bandera
+                }
                 break;
             case(INCREMENTO):
 
@@ -110,8 +116,10 @@ int main(void)
 
                 Estado = REPOSO;
                 break;
-            case(ACTUALIZAR):
-            break;
+            default:
+
+                Estado = REPOSO;
+                break;
         }
     }
 }
@@ -169,7 +177,7 @@ void tim9_init(void){
     
     TIM9->CNT = 0;
     TIM9->PSC = (16000-1);
-    TIM9->ARR = (2500-1);
+    TIM9->ARR = (1000-1);
     TIM9->DIER |= (TIM_DIER_UIE);
     TIM9->CR1 &= ~(TIM_CR1_CKD);
     TIM9->CR1 &= ~(TIM_CR1_ARPE);
@@ -191,7 +199,7 @@ void tim3_init(void){
     
     TIM3->CNT = 0;
     TIM3->PSC = (1600-1);
-    TIM3->ARR = (70-1);
+    TIM3->ARR = (30-1);
     TIM3->DIER |= (TIM_DIER_UIE);
     TIM3->CR1 &= ~(TIM_CR1_CKD);
     TIM3->CR1 &= ~(TIM_CR1_ARPE);
@@ -201,16 +209,15 @@ void tim3_init(void){
     TIM3->CR1 |= (TIM_CR1_CEN);
 }
 
-void TIM3_IRQHandler(void)
-{
+void TIM3_IRQHandler(void){
     if(TIM3->SR & TIM_SR_UIF){
         TIM3->SR = ~(TIM_SR_UIF);
         digito_actual = (digito_actual+1) % 4;
+        cambio_digito_flag = 1;
     }
 }
 
-void apagar(void)
-{
+void apagar(void){
     GPIOA->ODR |= (GPIO_ODR_OD12|GPIO_ODR_OD11);
     GPIOC->ODR |= (GPIO_ODR_OD10|GPIO_ODR_OD12|GPIO_ODR_OD11|GPIO_ODR_OD5|GPIO_ODR_OD13|GPIO_ODR_OD6);
     GPIOB->ODR |= (GPIO_ODR_OD12|GPIO_ODR_OD7);
@@ -218,6 +225,37 @@ void apagar(void)
 
 }
 
-void escribir(void){
+void cambiar_digito(void){
+    switch(digito_actual){
+        case 0: 
+            GPIOC->ODR &= ~(GPIO_ODR_OD5);  // Enciende PIN 1 (PC5) -> Miles
+            valor[0] = (contador / 1000) % 10;
+            break;
+        case 1: 
+            GPIOC->ODR &= ~(GPIO_ODR_OD13); // Enciende PIN 2 (PC13) -> Centenas
+            valor[1] = (contador / 100) % 10;
+            break;
+        case 2: 
+            GPIOC->ODR &= ~(GPIO_ODR_OD6);  // Enciende PIN 3 (PC6) -> Decenas
+            valor[2] = (contador / 10) % 10; 
+            break;
+        case 3: 
+            GPIOB->ODR &= ~(GPIO_ODR_OD7);  // Enciende PIN 4 (PB7) -> Unidades
+            valor[3] = contador % 10; 
+            break;
+    }
+}
 
+void escribir(void){
+    for(uint8_t i = 0; i < 7; i++){
+
+        bit = (tabla_7seg[valor[digito_actual]] >> i) & 1;
+
+        if(bit == 0){
+            mapa_segmentos[i].puerto->ODR &= ~(0b1 << mapa_segmentos[i].pin);
+        }
+        else{
+            mapa_segmentos[i].puerto->ODR |= (0b1 << mapa_segmentos[i].pin);
+        }
+    }
 }
