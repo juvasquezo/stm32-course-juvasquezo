@@ -25,23 +25,18 @@
  * PIN e ----- PC10
  * PIN f ----- PA11
  * PIN g ----- PD2
- * 
- *
+ * PIN +1 ---- PC3
+ * PIN -1 ---- PA4
  */
 
 #include <stdint.h>
 #include "stm32f4xx.h"
 #include "stm32f411xe.h"
 
-uint16_t contador = 0;
-uint8_t digito_actual = 0;
-uint8_t cambio_digito_flag = 0;
-uint8_t bit = 0;
-uint8_t valor[4] = {0,0,0,0};
-
 void gpio_init(void);
 void tim9_init(void);
 void tim3_init(void);
+void exti_init(void);
 
 void cambiar_digito(void);
 void escribir(void);
@@ -82,14 +77,19 @@ const uint8_t tabla_7seg[10] = {
     0b10010000  // 9 (A,B,C,D,F,G encendidos)
 };
 
-EstadoSistema Estado = REPOSO;
+volatile EstadoSistema Estado = REPOSO;
+volatile uint16_t contador = 0;
+volatile uint8_t cambio_digito_flag = 0;
+uint8_t digito_actual = 0;
+uint8_t bit = 0;
+uint8_t valor[4] = {0,0,0,0};
 
 int main(void)
 {   
     gpio_init();
     tim9_init();
     tim3_init();
-
+    exti_init();
 
     while(1){
 
@@ -135,7 +135,7 @@ void gpio_init(void){
     //Configuramos el gpioh de la salida del blinky PH1
     GPIOH->MODER  &= ~(GPIO_MODER_MODE1);
     GPIOH->MODER |= (GPIO_MODER_MODE1_0);
-    GPIOH->OTYPER &= ~(GPIO_OTYPER_OT1);
+    GPIOH->OTYPER &= ~(GPIO_OTYPER_OT1);    
     GPIOH->OSPEEDR &= ~(GPIO_OSPEEDR_OSPEED1);
     GPIOH->PUPDR &= ~(GPIO_PUPDR_PUPD1);
     GPIOH->ODR &= ~(GPIO_ODR_OD1);
@@ -169,7 +169,11 @@ void gpio_init(void){
     GPIOD->OSPEEDR &= ~(GPIO_OSPEEDR_OSPEED2);
     GPIOD->PUPDR &= ~(GPIO_PUPDR_PUPD2);
 
+    GPIOC->MODER &= ~(GPIO_MODER_MODE3);
+    GPIOC->PUPDR &= ~(GPIO_PUPDR_PUPD3);
 
+    GPIOA->MODER &= ~(GPIO_MODER_MODE4);
+    GPIOA->PUPDR &= ~(GPIO_PUPDR_PUPD4);
 }
 
 void tim9_init(void){
@@ -177,7 +181,7 @@ void tim9_init(void){
     
     TIM9->CNT = 0;
     TIM9->PSC = (16000-1);
-    TIM9->ARR = (1000-1);
+    TIM9->ARR = (500-1);
     TIM9->DIER |= (TIM_DIER_UIE);
     TIM9->CR1 &= ~(TIM_CR1_CKD);
     TIM9->CR1 &= ~(TIM_CR1_ARPE);
@@ -190,7 +194,6 @@ void TIM1_BRK_TIM9_IRQHandler(void){
     if (TIM9->SR & TIM_SR_UIF){
         GPIOH->ODR ^= (GPIO_ODR_OD1);
         TIM9->SR = ~(TIM_SR_UIF);
-        Estado = INCREMENTO;
     }
 }
 
@@ -214,6 +217,43 @@ void TIM3_IRQHandler(void){
         TIM3->SR = ~(TIM_SR_UIF);
         digito_actual = (digito_actual+1) % 4;
         cambio_digito_flag = 1;
+    }
+}
+
+void exti_init(void){
+    RCC->APB2ENR |= (RCC_APB2ENR_SYSCFGEN);
+    
+    SYSCFG->EXTICR[0] &= ~(SYSCFG_EXTICR1_EXTI3);
+    SYSCFG->EXTICR[0] |= (SYSCFG_EXTICR1_EXTI3_PC);
+    SYSCFG->EXTICR[1] &= ~(SYSCFG_EXTICR2_EXTI4);
+    SYSCFG->EXTICR[1] |= (SYSCFG_EXTICR2_EXTI4_PA);
+
+    EXTI->IMR |= (EXTI_IMR_MR3|EXTI_IMR_MR4);
+    EXTI->RTSR &= ~(EXTI_RTSR_TR4);
+    EXTI->FTSR &= ~(EXTI_FTSR_TR3);
+    EXTI->FTSR |= (EXTI_FTSR_TR4);
+    EXTI->RTSR |= (EXTI_RTSR_TR3);
+
+    EXTI->PR = (EXTI_PR_PR3|EXTI_PR_PR4);
+
+    NVIC_EnableIRQ(EXTI3_IRQn);
+    NVIC_EnableIRQ(EXTI4_IRQn);
+
+}
+
+void EXTI3_IRQHandler(void){
+    if(EXTI->PR & EXTI_PR_PR3){
+        EXTI->PR = (EXTI_PR_PR3);
+
+        Estado = INCREMENTO;
+    }
+}
+
+void EXTI4_IRQHandler(void){
+    if(EXTI->PR & EXTI_PR_PR4){
+        EXTI->PR = (EXTI_PR_PR4);
+
+        Estado = DECREMENTO;
     }
 }
 
@@ -259,3 +299,4 @@ void escribir(void){
         }
     }
 }
+
